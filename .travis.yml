@@ -1,0 +1,31 @@
+---
+# sudo: required
+language: python
+cache: pip
+services:
+  - docker
+python:
+  - '2.7'
+  - '3.5'
+  - '3.6'
+  - '3.7'
+  - '3.8-dev'
+env:
+  - MOLECULE_PLAYBOOK=single_primary.yml
+  - MOLECULE_PLAYBOOK=multi_primary.yml
+
+before_script:
+  - cd ../
+  - mv ansible-role-mysql daixijun.mysql
+  - cd daixijun.mysql
+
+install:
+  - pip install ansible molecule docker
+
+script:
+  - MOLECULE_PLAYBOOK=${MOLECULE_PLAYBOOK} molecule test
+
+notifications:
+  email: false
+  webhooks:
+    - https://galaxy.ansible.com/api/v1/notifications/
