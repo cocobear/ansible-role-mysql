@@ -1,0 +1,173 @@
+---
+- import_tasks: prepare.yaml
+
+- name: Ensure mysql group
+  group:
+    name: mysql
+    system: yes
+    state: present
+
+- name: Ensure mysql user
+  user:
+    group: mysql
+    name: mysql
+    system: yes
+    comment: mysql daemon user
+    create_home: false
+    shell: /bin/false
+    state: present
+
+- name: Installing dependencies
+  yum:
+    name:
+      - tzdata
+      - openssl
+      - openssl-devel
+      - libaio-devel
+      - numactl-libs
+      - python2-PyMySQL
+    state: present
+
+- name: Unarchive mysql binary package
+  unarchive:
+    src: "{{ mysql_download_url }}"
+    dest: /usr/local/
+    creates: /usr/local/mysql
+    remote_src: "{{ mysql_remote_src }}"
+    owner: mysql
+    group: mysql
+  register: mysql_unarchive
+
+- name: Move /usr/local/mysql-{{ mysql_version }}-el7-x86_64 => /usr/local/mysql
+  shell: mv /usr/local/mysql-{{ mysql_version }}-el7-x86_64 /usr/local/mysql
+  when: mysql_unarchive is changed
+  tags:
+    - skip_ansible_lint
+
+- name: Ensure directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: mysql
+    group: mysql
+  loop:
+    - /usr/local/mysql/etc/
+    - "{{ mysql_datadir }}"
+    - "{{ mysql_logdir }}"
+    - "{{ mysql_pidfile | dirname }}"
+    - "{{ mysql_socket | dirname }}"
+
+- name: Generate my.cnf
+  template:
+    src: my.cnf.j2
+    dest: /usr/local/mysql/etc/my.cnf
+    owner: mysql
+    group: mysql
+    validate: /usr/local/mysql/bin/mysqld --defaults-file=%s --validate-config
+
+- name: Generate /root/.my.cnf for mysqladmin
+  template:
+    src: mysqladmin.my.cnf.j2
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: 0400
+
+# - name: Add ansible_play_hosts to /etc/hosts
+#   blockinfile:
+#     path: /etc/hosts
+#     block: |
+#       {% for host in ansible_play_hosts %}
+#       {{ hostvars[host]['ansible_default_ipv4']['address'] }} {{ hostvars[host]['ansible_fqdn'] }}
+#       {% endfor %}
+#
+- name: Generate logrotate for logs
+  template:
+    src: mysql-log-rotate.j2
+    dest: /etc/logrotate.d/mysql
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Generate mysql startup script
+  template:
+    src: mysqld.init.j2
+    dest: /etc/init.d/mysqld
+    mode: 0755
+
+- name: Check initialize status
+  shell: ls -lA {{ mysql_datadir }} | grep -v total | wc -l
+  register: need_to_initialize
+  changed_when: false
+  tags:
+    - skip_ansible_lint
+
+- name: Initializing the Data Directory
+  shell: /usr/local/mysql/bin/mysqld --initialize-insecure --user=mysql --basedir=/usr/local/mysql --datadir={{ mysql_datadir }}
+  register: mysql_initialize_status
+  when:
+    - need_to_initialize.stdout|int == 0
+  tags:
+    - skip_ansible_lint
+
+- name: Ensure mysql service started
+  systemd:
+    daemon_reload: yes
+    name: mysqld
+    state: started
+
+- name: Change root password
+  mysql_user:
+    name: root
+    host_all: true
+    password: "{{ mysql_root_password }}"
+    login_user: root
+    login_unix_socket: "{{ mysql_socket }}"
+    sql_log_bin: false
+  when: mysql_initialize_status is not skipped
+
+- name: Removes all anonymous user accounts
+  mysql_user:
+    user: ""
+    host_all: yes
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    sql_log_bin: false
+    state: absent
+
+- import_tasks: mysql_group_replication.yaml
+  when: mysql_cluster_type == 'mgr'
+
+- name: Ensure business databases
+  mysql_db:
+    name: "{{ item.name }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    state: "{{ item.state | default('present') }}"
+  run_once: true
+  loop: "{{ mysql_databases }}"
+  when:
+    - ansible_play_hosts.index(inventory_hostname) == 0
+    - mysql_databases|length > 0
+
+# FIXME: 模块对于mysql8.0以上的版本，给用户授权`ALL`权限的时候会出现幂等性问题
+# 临时的解决方案是强制设置为 `changed_when: false`
+- name: Ensure business users
+  mysql_user:
+    name: "{{ item.name }}"
+    host: "{{ item.host | default('%') }}"
+    password: "{{ item.password }}"
+    encrypted: "{{ item.encrypted | default(omit) }}"
+    priv: "{{ item.priv | default(omit) }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    state: "{{ item.state | default(omit) }}"
+  run_once: true
+  # changed_when: false
+  loop: "{{ mysql_users }}"
+  when:
+    - ansible_play_hosts.index(inventory_hostname) == 0
+    - mysql_users|length > 0

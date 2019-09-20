@@ -1,0 +1,11 @@
+---
+- name: Remove old packages
+  yum:
+    name:
+      - mariadb-libs
+    state: absent
+
+- name: Remove old configutations
+  file:
+    path: /et/my.cnf
+    state: absent

@@ -1,0 +1,16 @@
+---
+- name: Converge
+  hosts: all
+  roles:
+    - role: daixijun.mysql
+      mysql_group_replication_single_primary_mode: true
+      mysql_databases:
+        - name: db1
+      mysql_users:
+        - name: monitor
+          password: monitor
+          priv: "sys.*:SELECT"
+        - name: proxysql
+          password: proxysql
+          priv: "*.*:INSERT,UPDATE,DELETE,SELECT,CREATE,DROP,ALTER"
+          # state: absent

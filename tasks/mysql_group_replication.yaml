@@ -1,0 +1,92 @@
+---
+- name: Ensure replication user
+  mysql_user:
+    name: repl
+    host: "%"
+    password: "{{ mysql_repl_password }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    priv: "*.*:REPLICATION SLAVE"
+    sql_log_bin: false
+    state: present
+
+- name: Change master
+  shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "CHANGE MASTER TO MASTER_USER='repl', MASTER_PASSWORD='{{ mysql_repl_password }}' FOR CHANNEL 'group_replication_recovery';"
+  changed_when: false
+  tags:
+    - skip_ansible_lint
+
+- name: Verify that the primary node status
+  shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "SELECT * FROM performance_schema.replication_group_members where member_role='PRIMARY';"
+  run_once: true
+  changed_when: false
+  register: mysql_mgr_primary_status
+  when: ansible_play_hosts.index(inventory_hostname) == 0
+  tags:
+    - skip_ansible_lint
+
+- name: Initializing MGR cluster
+  shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "{{ item }}"
+  loop:
+    - "SET GLOBAL group_replication_bootstrap_group=ON;"
+    - "START GROUP_REPLICATION;"
+    - "SET GLOBAL group_replication_bootstrap_group=OFF;"
+  run_once: true
+  when:
+    - ansible_play_hosts.index(inventory_hostname) == 0
+    - not mysql_mgr_primary_status.stdout.strip()
+  tags:
+    - skip_ansible_lint
+
+- name: Verify that the member nodes status
+  shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "SELECT * FROM performance_schema.replication_group_members where member_host='{{ ansible_default_ipv4.address }}';"
+  changed_when: false
+  register: mysql_mgr_member_status
+  when:
+    - ansible_play_hosts.index(inventory_hostname) != 0
+  tags:
+    - skip_ansible_lint
+
+- name: Startting MGR cluster member nodes
+  shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "START GROUP_REPLICATION;"
+  when:
+    - ansible_play_hosts.index(inventory_hostname) != 0
+    - not mysql_mgr_member_status.stdout.strip()
+  tags:
+    - skip_ansible_lint
+
+- name: Query MGR Cluster status
+  shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "SELECT * FROM performance_schema.replication_group_members;"
+  register: mgr_cluster_status
+  changed_when: false
+  run_once: true
+  when:
+    - ansible_play_hosts.index(inventory_hostname) == 0
+  tags:
+    - skip_ansible_lint
+
+- name: Show MGR Cluster status
+  pause:
+    seconds: 1
+    prompt: "{{ mgr_cluster_status.stdout }}"
+  run_once: true
+  when:
+    - ansible_play_hosts.index(inventory_hostname) == 0
+    - mgr_cluster_status is not skipped
+
+- name: Copy gr_member_routing_candidate_status.sql
+  copy:
+    src: gr_member_routing_candidate_status.sql
+    dest: /tmp/gr_member_routing_candidate_status.sql
+  run_once: true
+  when:
+    - ansible_play_hosts.index(inventory_hostname) == 0
+
+- name: Create internal view sys.gr_member_routing_candidate_status for monitoring
+  shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} < /tmp/gr_member_routing_candidate_status.sql
+  run_once: true
+  when:
+    - ansible_play_hosts.index(inventory_hostname) == 0
+    - mysql_initialize_status is not skipped
+

@@ -1,0 +1,4 @@
+molecule/default/files
+.vscode/
+__pycache__/
+*.pyc

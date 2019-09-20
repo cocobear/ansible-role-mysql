@@ -1,0 +1,149 @@
+# {{ ansible_managed }}
+
+[mysqld]
+# Connection and Thread variables
+port                            = 3306
+bind_address                    = 0.0.0.0
+
+pid_file                        = {{ mysql_pidfile }}
+socket                          = {{ mysql_socket }}
+mysqlx_socket                   = {{ mysql_socket | dirname }}/mysqlx.sock
+basedir                         = /usr/local/mysql
+datadir                         = /data/mysql
+tmpdir                          = /tmp/
+default_authentication_plugin   = mysql_native_password # 兼容老版本认证方式
+default_storage_engine          = INNODB
+character_set_server            = utf8mb4
+max_connections                 = 505  # 总最大连接数，预留5个用于紧急情况下备用
+max_user_connections            = 500  # 最大用户连接数
+max_connect_errors              = 200
+max_allowed_packet              = 16M
+tmp_table_size                  = 256M
+max_heap_table_size             = 96M
+interactive_timeout             = 600
+wait_timeout                    = 600
+thread_cache_size               = 505
+transaction_isolation           = READ-COMMITTED
+lower_case_table_names          = 1
+
+# Session variables
+sort_buffer_size                             = 2M
+tmp_table_size                               = 32M
+
+# Other buffers and caches
+table_definition_cache                       = 1400
+table_open_cache                             = 2000
+table_open_cache_instances                   = 16
+
+skip_name_resolve               = 0
+
+# 时区
+default_time_zone               = "+8:00"
+
+# INNODB 优化
+innodb_file_per_table           = 1  # 独立表空间
+innodb_log_file_size            = 256M
+innodb_buffer_pool_size         = {{ (ansible_memtotal_mb / 1024 * 0.7) | int }}G
+innodb_flush_method             = O_DIRECT
+
+# prevent use of non-transactional storage engines
+disabled_storage_engines        = "MyISAM,BLACKHOLE,FEDERATED,ARCHIVE"
+
+# Binary logging and Replication
+server_id                           = {{ ansible_play_hosts.index(inventory_hostname) + 1 }}
+binlog-row-image                    = MINIMAL
+binlog-rows-query-log-events        = ON
+log-bin-trust-function-creators     = TRUE
+log_bin                             = mysql-bin
+binlog_format                       = ROW
+binlog_checksum                     = NONE
+binlog_expire_logs_seconds          = 604800 # 7 days
+binlog_cache_size                   = 1M
+binlog_stmt_cache_size              = 1M
+max_binlog_size                     = 128M
+sync_binlog                         = 0
+log_timestamps                      = system
+
+# Slow Query log
+slow_query_log                  = 1
+long_query_time                 = 10
+log_queries_not_using_indexes   = 1
+slow_query_log_file             = {{ mysql_logdir | regex_replace("/$") }}/mysqld.slow.log
+min_examined_row_limit                       = 100
+general_log                     = 0
+general_log_file                = {{ mysql_logdir | regex_replace("/$") }}/mysqld.log
+
+# Error log
+log_error                       = {{ mysql_logdir | regex_replace("/$") }}/mysqld.error.log
+log_error_verbosity             = 2
+relay_log                       = mysql-relay
+relay_log_purge                 = 1
+master_info_repository          = TABLE
+relay_log_info_repository       = TABLE
+relay_log_recovery              = ON
+log_slave_updates               = ON
+
+# Security variables
+local_infile                                 = 0
+allow_suspicious_udfs                        = false
+
+gtid_mode                                    = ON  # 开启 GTID 功能
+enforce_gtid_consistency                     = ON  # 开启强一致性
+
+# 基于主键的并行复制
+slave_parallel_type                          = LOGICAL_CLOCK
+slave_preserve_commit_order                  = 1
+slave_parallel_workers                       = 16
+
+{% if mysql_audit_log %}
+plugin-load                                  = audit_log.so
+audit_log_connection_policy                  = 'ALL'
+audit_log_exclude_accounts                   = NULL
+audit_log_policy                             = 'ALL'
+audit_log_statement_policy                   = 'ALL'
+audit_log_strategy                           = 'SEMISYNCHRONOUS'
+{% endif %}
+
+{% if mysql_cluster_type == 'mgr' %}
+# Mysql Group Replication
+plugin-load                                                 = group_replication.so
+transaction_write_set_extraction                            = XXHASH64
+loose-group_replication_group_name                          = "{{ mysql_group_replication_name }}" # 可在库里使用SELECT UUID()生成，一个组的所有机器都相同。
+loose-group_replication_start_on_boot                       = OFF
+loose-group_replication_bootstrap_group                     = OFF
+loose-group_replication_local_address                       = "{{ ansible_default_ipv4.address }}:33061"
+loose-group_replication_ip_whitelist                        = "{{ ansible_play_hosts | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | list | join(',') }}"
+loose-group_replication_group_seeds                         = "{{ ansible_play_hosts | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | map('regex_replace', '(.+)', '\\1:33061') | list | join(',') }}"
+loose-group_replication_recovery_retry_count                = 10
+loose-group_replication_recovery_reconnect_interval         = 60
+loose-group_replication_ssl_mode                            = REQUIRED
+loose-group_replication_recovery_use_ssl                    = 1
+{% if mysql_group_replication_single_primary_mode %}
+loose-group_replication_auto_increment_increment            = 1  # 默认为7
+loose-group_replication_single_primary_mode                 = ON # 单主模式,默认为 ON
+# 级联外键，单主模式下必须关闭，多主模式下不能完全支持
+loose-group_replication_enforce_update_everywhere_checks    = OFF
+{% else %}
+loose-group_replication_auto_increment_increment            = 7  # 默认为7
+loose-group_replication_single_primary_mode                 = OFF # 单主模式,默认为 ON
+loose-group_replication_enforce_update_everywhere_checks    = ON
+{% endif %}
+{% endif %}
+
+report_host                             = {{ ansible_default_ipv4.address }}
+report_port                             = 3306
+
+[client]
+default_character_set           = utf8mb4
+port                            = 3306
+socket                          = {{ mysql_socket }}
+
+[mysql]
+default_character_set           = utf8mb4
+port                            = 3306
+socket                          = {{ mysql_socket }}
+
+[mysqldump]
+max_allowed_packet              = 16M
+port                            = 3306
+socket                          = {{ mysql_socket }}

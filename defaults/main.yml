@@ -1,0 +1,28 @@
+---
+mysql_version: 8.0.17
+mysql_remote_src: yes
+mysql_download_url: https://mirrors.tuna.tsinghua.edu.cn/mysql/downloads/MySQL-8.0/mysql-{{ mysql_version }}-el7-x86_64.tar.gz
+mysql_datadir: /data/mysql
+mysql_logdir: /var/log/mysqld
+mysql_pidfile: /var/run/mysqld/mysqld.pid
+mysql_socket: /var/run/mysqld/mysqld.sock
+mysql_root_password: 4cpUc7yyfoTp>o3VCiLq
+# 集群类型: mgr/master-slave
+mysql_cluster_type: mgr
+
+# 是否开启审计日志
+mysql_audit_log: false
+
+mysql_repl_password: jMrxC9VdVUs<hwbyXinA
+# MGR
+mysql_group_replication_name: cbd76b31-d846-11e9-a464-0242ac110004
+mysql_group_replication_single_primary_mode: true
+
+mysql_databases: []
+# - name: db1
+# - name: db2
+
+mysql_users: []
+# - name: username
+#   host: '%'
+#   priv: 'db1.*:ALL'
