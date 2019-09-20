@@ -64,7 +64,7 @@ BSD
 TODO
 -------
 
-* [  ] 主备架构(Primary-Standby)
+* [ ] 主备架构(Primary-Standby)
 <!-- * [ ] mysql_user 模块对于mysql8.0以上的版本，给用户授权`ALL`权限的时候会出现幂等性问题 -->
 
 联系方式
