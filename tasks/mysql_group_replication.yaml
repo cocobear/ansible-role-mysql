@@ -89,4 +89,3 @@
   when:
     - ansible_play_hosts.index(inventory_hostname) == 0
     - mysql_initialize_status is not skipped
-

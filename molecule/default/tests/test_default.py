@@ -1,5 +1,4 @@
 import os
-
 import testinfra.utils.ansible_runner
 
 testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
@@ -44,4 +43,3 @@ def test_mysqld_socket_listen(host):
     ss = host.socket("tcp://0.0.0.0:3306")
 
     assert ss.is_listening
-
