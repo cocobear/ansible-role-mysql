@@ -1,6 +1,7 @@
 ---
 - name: Converge
   hosts: all
+  any_errors_fatal: yes
   roles:
     - role: daixijun.mysql
       mysql_remote_src: no

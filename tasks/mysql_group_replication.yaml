@@ -13,12 +13,14 @@
 
 - name: Change master
   shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "CHANGE MASTER TO MASTER_USER='repl', MASTER_PASSWORD='{{ mysql_repl_password }}' FOR CHANNEL 'group_replication_recovery';"
+  no_log: yes
   changed_when: false
   tags:
     - skip_ansible_lint
 
 - name: Verify that the primary node status
   shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "SELECT * FROM performance_schema.replication_group_members where member_role='PRIMARY';"
+  no_log: yes
   run_once: true
   changed_when: false
   register: mysql_mgr_primary_status
@@ -33,6 +35,7 @@
     - "START GROUP_REPLICATION;"
     - "SET GLOBAL group_replication_bootstrap_group=OFF;"
   run_once: true
+  no_log: yes
   when:
     - ansible_play_hosts.index(inventory_hostname) == 0
     - not mysql_mgr_primary_status.stdout.strip()
@@ -42,6 +45,7 @@
 - name: Verify that the member nodes status
   shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "SELECT * FROM performance_schema.replication_group_members where member_host='{{ ansible_default_ipv4.address }}';"
   changed_when: false
+  no_log: yes
   register: mysql_mgr_member_status
   when:
     - ansible_play_hosts.index(inventory_hostname) != 0
@@ -50,6 +54,7 @@
 
 - name: Startting MGR cluster member nodes
   shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "START GROUP_REPLICATION;"
+  no_log: yes
   when:
     - ansible_play_hosts.index(inventory_hostname) != 0
     - not mysql_mgr_member_status.stdout.strip()
@@ -59,6 +64,7 @@
 - name: Query MGR Cluster status
   shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} -ne "SELECT * FROM performance_schema.replication_group_members;"
   register: mgr_cluster_status
+  no_log: yes
   changed_when: false
   run_once: true
   when:
@@ -85,6 +91,7 @@
 
 - name: Create internal view sys.gr_member_routing_candidate_status for monitoring
   shell: /usr/local/mysql/bin/mysql -uroot -p'{{ mysql_root_password }}' --socket={{ mysql_socket }} < /tmp/gr_member_routing_candidate_status.sql
+  no_log: yes
   run_once: true
   when:
     - ansible_play_hosts.index(inventory_hostname) == 0

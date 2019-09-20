@@ -1,9 +1,11 @@
 ---
 - name: Converge
   hosts: all
+  any_errors_fatal: yes
   roles:
     - role: daixijun.mysql
       mysql_group_replication_single_primary_mode: true
+      mysql_download_url: https://dev.mysql.com/get/Downloads/MySQL-8.0/mysql-{{ mysql_version }}-el7-x86_64.tar.gz
       mysql_databases:
         - name: db1
       mysql_users:

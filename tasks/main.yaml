@@ -167,6 +167,7 @@
     state: "{{ item.state | default(omit) }}"
   run_once: true
   # changed_when: false
+  no_log: yes
   loop: "{{ mysql_users }}"
   when:
     - ansible_play_hosts.index(inventory_hostname) == 0
