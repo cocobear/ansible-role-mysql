@@ -1,6 +1,11 @@
 ---
 name: mysql group replication multiple primary
-on: push
+on:
+  push:
+    paths:
+      - '*'
+      - '!/.github/workflows/*'
+      - '!*.md'
 jobs:
   test:
     runs-on: ubuntu-latest
