@@ -11,10 +11,8 @@ services:
 matrix:
   fast_finish: true
 python:
-  - '2.7'
-  - '3.5'
-  - '3.6'
-  - '3.7'
+  - "2.7"
+  - "3.7"
 env:
   - MOLECULE_PLAYBOOK=single_primary.yml
   - MOLECULE_PLAYBOOK=multi_primary.yml
