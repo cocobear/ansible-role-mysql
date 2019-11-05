@@ -1,9 +1,6 @@
 ---
 name: mysql group replication multiple primary
-on:
-  push:
-    paths:
-      - "*"
+on: [push]
 jobs:
   test:
     runs-on: ubuntu-latest
